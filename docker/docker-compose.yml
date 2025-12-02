@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-patchmon_user} -d $${POSTGRES_DB:-patchmon_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patchmon_user} -d ${POSTGRES_DB:-patchmon_db}"]
       interval: 3s
       timeout: 5s
       retries: 7
@@ -20,13 +20,13 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     # REDIS_PASSWORD is required – no default
-    command: redis-server --requirepass $${REDIS_PASSWORD}
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD} # REQUIRED – no default
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "$${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 3s
       timeout: 5s
       retries: 7
