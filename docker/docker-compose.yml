@@ -1,19 +1,3 @@
-# Change 3 Passwords in this file:
-# Generate passwords with 'openssl rand -hex 64'
-# 
-# 1. The database password in the environment variable POSTGRES_PASSWORD
-# 2. The redis password in the command redis-server --requirepass your-redis-password-here
-# 3. The jwt secret in the environment variable JWT_SECRET
-#
-#
-# Change 2 URL areas in this file:
-# 1. Setup your CORS_ORIGIN to what url you will use for accessing PatchMon frontend url
-# 2. Setup your SERVER_PROTOCOL, SERVER_HOST and SERVER_PORT to what you will use for linux agents to access PatchMon
-#
-# This is generally the same as your CORS_ORIGIN url , in some cases it might be different - SERVER_* variables are used in the scripts for Server connection.
-# You can also change this in the front-end but in the case of docker-compose - it is overwritten by the variables set here.
-
-
 name: patchmon
 
 services:
@@ -21,13 +5,13 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: patchmon_db
-      POSTGRES_USER: patchmon_user
-      POSTGRES_PASSWORD: # CREATE A STRONG DB PASSWORD AND PUT IT HERE
+      POSTGRES_DB: ${POSTGRES_DB:-patchmon_db}
+      POSTGRES_USER: ${POSTGRES_USER:-patchmon_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # REQUIRED – no default
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U patchmon_user -d patchmon_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-patchmon_user} -d $${POSTGRES_DB:-patchmon_db}"]
       interval: 3s
       timeout: 5s
       retries: 7
@@ -35,11 +19,14 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --requirepass your-redis-password-here # CHANGE THIS TO YOUR REDIS PASSWORD
+    # REDIS_PASSWORD is required – no default
+    command: redis-server --requirepass $${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD} # REQUIRED – no default
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "your-redis-password-here", "ping"] # CHANGE THIS TO YOUR REDIS PASSWORD
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "$${REDIS_PASSWORD}", "ping"]
       interval: 3s
       timeout: 5s
       retries: 7
@@ -47,33 +34,40 @@ services:
   backend:
     image: ghcr.io/patchmon/patchmon-backend:latest
     restart: unless-stopped
-    # See PatchMon Docker README for additional environment variables and configuration instructions
     environment:
-      LOG_LEVEL: info
-      DATABASE_URL: postgresql://patchmon_user:REPLACE_YOUR_POSTGRES_PASSWORD_HERE@database:5432/patchmon_db
-      JWT_SECRET: # CREATE A STRONG SECRET AND PUT IT HERE
-      SERVER_PROTOCOL: http
-      SERVER_HOST: localhost
-      SERVER_PORT: 3000
-      CORS_ORIGIN: http://localhost:3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # Secrets – all REQUIRED, no defaults
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # Agent / frontend access configuration
+      SERVER_PROTOCOL: ${SERVER_PROTOCOL:-http}
+      SERVER_HOST: ${SERVER_HOST:-localhost}
+      SERVER_PORT: ${SERVER_PORT:-3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+
       # Database Connection Pool Configuration (Prisma)
-      DB_CONNECTION_LIMIT: 30
-      DB_POOL_TIMEOUT: 20
-      DB_CONNECT_TIMEOUT: 10
-      DB_IDLE_TIMEOUT: 300
-      DB_MAX_LIFETIME: 1800
+      DB_CONNECTION_LIMIT: ${DB_CONNECTION_LIMIT:-30}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-20}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-10}
+      DB_IDLE_TIMEOUT: ${DB_IDLE_TIMEOUT:-300}
+      DB_MAX_LIFETIME: ${DB_MAX_LIFETIME:-1800}
+
       # Rate Limiting (times in milliseconds)
-      RATE_LIMIT_WINDOW_MS: 900000
-      RATE_LIMIT_MAX: 5000
-      AUTH_RATE_LIMIT_WINDOW_MS: 600000
-      AUTH_RATE_LIMIT_MAX: 500
-      AGENT_RATE_LIMIT_WINDOW_MS: 60000
-      AGENT_RATE_LIMIT_MAX: 1000
-      # Redis Configuration
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: your-redis-password-here
-      REDIS_DB: 0
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-5000}
+      AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS:-600000}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-500}
+      AGENT_RATE_LIMIT_WINDOW_MS: ${AGENT_RATE_LIMIT_WINDOW_MS:-60000}
+      AGENT_RATE_LIMIT_MAX: ${AGENT_RATE_LIMIT_MAX:-1000}
+
+      # Redis Configuration (non-secret parts can have defaults)
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+
     volumes:
       - agent_files:/app/agents
     depends_on:
@@ -85,8 +79,7 @@ services:
   frontend:
     image: ghcr.io/patchmon/patchmon-frontend:latest
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # No port mappings here – expose via reverse proxy or parent stack
     depends_on:
       backend:
         condition: service_healthy
